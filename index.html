@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ko">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
@@ -9,17 +9,11 @@
     html, body { height: 100%; margin: 0; background:#0b0f14; font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR", sans-serif; }
     .wrap { height:100%; display:flex; align-items:center; justify-content:center; padding:12px; box-sizing:border-box; }
     canvas { background:#070a0f; border:1px solid #1b2430; border-radius:14px; box-shadow:0 10px 30px rgba(0,0,0,.35); max-width:min(92vw, 520px); max-height:92vh; width:520px; height:780px; }
-    .hint { position: fixed; left: 12px; bottom: 10px; opacity:.88; font-size:12px; line-height:1.65; }
-    .hint kbd{ border:1px solid #2a3646; border-bottom:2px solid #2a3646; padding:2px 6px; border-radius:6px; background:#0b121c; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <canvas id="c" width="520" height="780"></canvas>
-  </div>
-  <div class="hint">
-    이동 <kbd>WASD</kbd>/<kbd>←↑→↓</kbd> · 시작 <kbd>Enter</kbd> · 일시정지 <kbd>P</kbd><br/>
-    궁극기(라운드당 1회) <kbd>X</kbd> · 방어기(라운드당 3회) <kbd>C</kbd>
   </div>
 
 <script>
@@ -46,6 +40,19 @@
       if (state === STATE.CONTINUE) {
         if (k === "y") continueYes();
         if (k === "n") continueNo();
+      }
+      // Key guide
+      if (k === "k") {
+        if (state === STATE.TITLE) state = STATE.KEYGUIDE;
+        else if (state === STATE.KEYGUIDE) state = STATE.TITLE;
+        else if (state === STATE.RANKING) state = STATE.KEYGUIDE;
+      }
+
+// Ranking board
+      if (k === "r") {
+        if (state === STATE.TITLE) openRankingBoard("RANKING", false);
+        else if (state === STATE.RANKING) state = STATE.TITLE;
+        else if (state === STATE.KEYGUIDE) openRankingBoard("RANKING", false);
       }
 
       if (k === "enter" && state !== STATE.CONTINUE) startOrRestart();
@@ -163,24 +170,21 @@
     // restore lives
     player.lives = 3;
 
-
-    // refill shield. Ultimate gauge resets to 0% on continue (spec)
+    // refill shield (ultimate gauge preserved on continue)
     player.shieldCharges = 3;
-    player.ult = 0;
-    player.ultGauge = 0;
 
     state = STATE.PLAY;
   }
 
   function continueNo() {
     if (state !== STATE.CONTINUE) return;
-    state = STATE.GAME_OVER;
+    openRankingBoard("GAME OVER", true);
   }
 
   // ======================
   // Game State
   // ======================
-  const STATE = { TITLE:"TITLE", PLAY:"PLAY", ROUND_CLEAR:"ROUND_CLEAR", CONTINUE:"CONTINUE", GAME_OVER:"GAME_OVER", VICTORY:"VICTORY", PAUSE:"PAUSE" };
+  const STATE = {TITLE:"TITLE", PLAY:"PLAY", ROUND_CLEAR:"ROUND_CLEAR", CONTINUE:"CONTINUE", GAME_OVER:"GAME_OVER", VICTORY:"VICTORY", PAUSE:"PAUSE", RANKING:"RANKING", KEYGUIDE:"KEYGUIDE" };
   let state = STATE.TITLE;
   let prevState = state;
 
@@ -217,6 +221,10 @@
   const flash = { t: 0 };
   const shake = { t: 0, mag: 0, dur: 1.0 };
 
+  const nukeFx = { t: 0, dur: 0.55 }; // screen-wide ultimate impact FX
+
+  function triggerNukeFx() { nukeFx.t = nukeFx.dur; }
+
   function triggerShake(mag=6, dur=1.0) {
     shake.mag = mag;
     shake.dur = dur;
@@ -227,10 +235,62 @@
   // Score
   let score = 0;
 
+
+  // Total hits taken (for scoreboard/leaderboard)
+  let hitsTaken = 0;
+
   // Arcade credits (0..9)
   let credits = 0;
   let continueCountdown = 0;
   let noCreditMsg = 0; // seconds
+
+  // ======================
+  // Ranking (Top 10, score + hits) - LocalStorage
+  // ======================
+  const LB_KEY = "neon_strikers_leaderboard_v1";
+  let rankingHeader = "RANKING";
+  let lastRunScore = 0;
+  let lastRunHits  = 0;
+  let leaderboardCache = [];
+
+  function loadLeaderboard() {
+    try {
+      const raw = localStorage.getItem(LB_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(arr)) return [];
+      return arr
+        .filter(e => e && Number.isFinite(e.score) && Number.isFinite(e.hits))
+        .map(e => ({ score: Math.max(0, e.score|0), hits: Math.max(0, e.hits|0), ts: Number.isFinite(e.ts) ? e.ts : 0 }))
+        .slice(0, 10);
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveLeaderboard(arr) {
+    try { localStorage.setItem(LB_KEY, JSON.stringify(arr)); } catch (e) {}
+  }
+
+  function recordAndGetLeaderboard(s, h) {
+    const arr = loadLeaderboard();
+    arr.push({ score: Math.max(0, s|0), hits: Math.max(0, h|0), ts: Date.now() });
+    arr.sort((a,b) => (b.score - a.score) || (a.hits - b.hits) || (a.ts - b.ts));
+    const top = arr.slice(0, 10);
+    saveLeaderboard(top);
+    return top;
+  }
+
+  function openRankingBoard(header, recordRun) {
+    rankingHeader = header || "RANKING";
+    if (recordRun) {
+      lastRunScore = score|0;
+      lastRunHits  = hitsTaken|0;
+      leaderboardCache = recordAndGetLeaderboard(lastRunScore, lastRunHits);
+    } else {
+      leaderboardCache = loadLeaderboard();
+    }
+    state = STATE.RANKING;
+  }
 
 
   // Player
@@ -386,6 +446,7 @@
 
   function makeEnemy(type, x, y, extra={}) {
     const base = EnemyBase[type];
+    x = clamp(x, base.r + 6, W - (base.r + 6));
     const hpM = roundHPMult[roundIndex] ?? 1;
     const hp = Math.ceil(base.hp * hpM * (extra.hpMult ?? 1));
 
@@ -425,10 +486,22 @@
   }
 
   function spawnLine(type, n, gap, speedMult=1.0) {
-    const totalW = (n-1)*gap;
-    const startX = clamp((W - totalW)/2, 40, W-40-totalW);
+    const r = (EnemyBase[type]?.r ?? 18);
+    const side = Math.max(40, r + 10);
+
+    let effGap = gap;
+    let totalW = (n-1)*effGap;
+    const maxSpan = W - 2*side;
+
+    // If the formation would overflow the screen, compress the gap so every unit stays on-screen.
+    if (n > 1 && totalW > maxSpan) {
+      effGap = maxSpan / (n-1);
+      totalW = (n-1)*effGap;
+    }
+
+    const startX = clamp((W - totalW)/2, side, W - side - totalW);
     for (let i=0;i<n;i++){
-      enemies.push(makeEnemy(type, startX + i*gap, -30 - i*10, {
+      enemies.push(makeEnemy(type, startX + i*effGap, -30 - i*10, {
         vy: (EnemyBase[type]?.speed ?? 120) * speedMult,
       }));
     }
@@ -612,24 +685,28 @@
     player.invuln = Math.max(player.invuln, 2.0);
     player.invulnMode = "ultimate";
 
-    const startY = clamp(player.y - 30, 80, H - 140);
-    const endY   = H * 0.16;
-    const dur    = 0.75;
+const startX = player.x;
+const startY = clamp(player.y - 30, 80, H - 140);
+const endX   = W * 0.5;
+const endY   = H * 0.5;
+const dur    = 0.75;
 
-    nuke = {
-      state: "recede",
-      x: player.x,
-      y: startY,
-      startY, endY,
-      t: 0, dur,
-      u: 0,
+nuke = {
+  state: "recede",
+  x: startX,
+  y: startY,
+  startX, startY,
+  endX, endY,
+  t: 0, dur,
+  u: 0,
 
-      startScale: 1.95,
-      endScale:   0.28,
-      scale:      1.95,
+  startScale: 1.95,
+  endScale:   0.28,
+  scale:      1.95,
 
-      impactY: endY
-    };
+  impactX: endX,
+  impactY: endY
+};
 
     sfxUltimate();
     flash.t = 0.10;
@@ -671,8 +748,31 @@
       if (boss.hp < 0) boss.hp = 0;
     }
 
+
+    // Nuke impact FX (global strike feel: main burst + brief screen flash)
+    triggerNukeFx();
+
+    const cx = nuke ? nuke.impactX : W/2;
+    const cy = nuke ? nuke.impactY : (H * 0.18);
+
+    // main burst (origin) - kept like v21
+    for (let i=0;i<90;i++){
+      particles.push({ x: cx, y: cy, vx: rand(-520, 520), vy: rand(-520, 520), t:0, life: rand(0.30, 0.85) });
+    }
+
+    // very light, screen-wide sparks so it still reads as a full-range attack (toned down vs v22)
+    for (let b=0;b<2;b++){
+      const bx = rand(70, W - 70);
+      const by = rand(H * 0.28, H * 0.85);
+      for (let i=0;i<8;i++){
+        particles.push({ x: bx, y: by, vx: rand(-220, 220), vy: rand(-220, 220), t:0, life: rand(0.18, 0.40) });
+      }
+    }
+
+    // slightly stronger shake than v21, but not overwhelming
+    triggerShake(9, 0.60);
+
     flash.t = 0.20;
-    // (shake removed per spec)
     sfxExplosion(); sfxExplosion();
   }
 
@@ -849,6 +949,7 @@
         // common timers (must tick even on TITLE/GAME_OVER so effects don't get stuck)
         if (flash.t > 0) flash.t = Math.max(0, flash.t - dt);
         if (shake.t > 0) shake.t = Math.max(0, shake.t - dt);
+        if (nukeFx.t > 0) nukeFx.t = Math.max(0, nukeFx.t - dt);
         if (noCreditMsg > 0) noCreditMsg = Math.max(0, noCreditMsg - dt);
 
         if (state === STATE.PLAY) update(dt);
@@ -916,6 +1017,9 @@
 
       if (e.type === "zigzag") e.x += Math.sin(e.t * e.zigFreq) * e.zigAmp * dt;
 
+      // Keep all enemies fully on-screen (prevents unreachable off-screen shooters).
+      e.x = clamp(e.x, e.r + 6, W - (e.r + 6));
+
       if (e.type === "shooter") {
         if (e.y < e.stopY) e.y += e.vy * dt;
         else {
@@ -969,7 +1073,7 @@
           roundIndex++;
 
           if (roundIndex >= 3) {
-            state = STATE.VICTORY;
+            openRankingBoard("VICTORY", true);
           } else {
             bullets = []; enemyBullets = []; hazards = []; enemies = []; powerups = []; particles = [];
             nuke = null; shield = null;
@@ -1063,6 +1167,7 @@
         const u = clamp(nuke.t / nuke.dur, 0, 1);
         nuke.u = u;
         nuke.scale = lerp(nuke.startScale, nuke.endScale, u);
+        nuke.x = lerp(nuke.startX, nuke.endX, u);
         nuke.y = lerp(nuke.startY, nuke.endY, u);
 
         if (u >= 1) {
@@ -1203,6 +1308,7 @@
   }
 
   function playerHit() {
+    hitsTaken += 1;
     player.lives -= 1;
     player.invuln = 1.20;
     player.invulnMode = "hit";
@@ -1257,6 +1363,7 @@
     ctx.globalAlpha = 1;
 
     if (nuke) drawNuke(nuke);
+    if (nukeFx.t > 0) drawNukeScreenFX();
 
     drawPlayer();
     drawHUD();
@@ -1289,6 +1396,46 @@
     ctx.fillStyle = "rgba(255,255,255,0.03)";
     for (let y=0;y<H;y+=6) ctx.fillRect(0,y,W,1);
   }
+
+  function drawNukeScreenFX() {
+    // Subtle full-screen cue so the ultimate reads as a full-range attack (kept lighter than v22).
+    const u = 1 - (nukeFx.t / (nukeFx.dur || 1));
+    const maxR = Math.hypot(W, H);
+
+    ctx.save();
+
+    // Quick warm flash across the whole screen
+    ctx.globalAlpha = 0.14 * (1 - u);
+    ctx.fillStyle = "rgba(255, 230, 200, 1)";
+    ctx.fillRect(0, 0, W, H);
+
+    // One soft shock ring (single ring, no stacks)
+    ctx.globalCompositeOperation = "lighter";
+    const r = u * maxR * 0.90;
+    const a = (1 - u) * 0.22;
+    if (a > 0.001) {
+      ctx.globalAlpha = a;
+      ctx.lineWidth = 10;
+      ctx.strokeStyle = "rgba(255, 245, 235, 1)";
+      ctx.beginPath();
+      ctx.arc(W * 0.5, H * 0.5, r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Sweeping band wave (reads as a screen-wide strike)
+    const y = H * (0.25 + 0.55 * u);
+    const hh = 38;
+    const g = ctx.createLinearGradient(0, y - hh, 0, y + hh);
+    g.addColorStop(0, "rgba(255, 180, 120, 0)");
+    g.addColorStop(0.5, "rgba(255, 180, 120, 0.28)");
+    g.addColorStop(1, "rgba(255, 180, 120, 0)");
+    ctx.globalAlpha = 0.90 * (1 - u);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, y - hh, W, hh * 2);
+
+    ctx.restore();
+  }
+
 
   // Player appearance changes per weapon level
   function drawPlayer() {
@@ -1843,12 +1990,28 @@
     if (nk.state === "impact") {
       const v = clamp(nk.t / 0.28, 0, 1);
       ctx.save();
+
+      // bomb explosion bloom
+      ctx.globalCompositeOperation = "lighter";
+      const g = ctx.createRadialGradient(nk.impactX, nk.impactY, 0, nk.impactX, nk.impactY, 260);
+      g.addColorStop(0, "rgba(255,209,102,0.35)");
+      g.addColorStop(0.35, "rgba(255,77,109,0.20)");
+      g.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.globalAlpha = 0.90 * (1 - v);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(nk.impactX, nk.impactY, 80 + v*220, 0, Math.PI*2);
+      ctx.fill();
+
+      // ring shockwave
+      ctx.globalCompositeOperation = "source-over";
       ctx.globalAlpha = 0.65 * (1 - v);
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(nk.x, nk.impactY, 40 + v*180, 0, Math.PI*2);
+      ctx.arc(nk.impactX, nk.impactY, 40 + v*180, 0, Math.PI*2);
       ctx.stroke();
+
       ctx.restore();
     }
   }
@@ -1924,14 +2087,42 @@
 
       ctx.font = "14px system-ui";
       ctx.fillStyle = "rgba(255,255,255,0.85)";
-      ctx.fillText("Enter로 시작 · X(궁극기) · C(방어기)", W/2, H*0.50);
-      ctx.fillText("궁극기 사용 시 2초 무적(색 변화)", W/2, H*0.54);
+      ctx.fillText("Press 5 to insert credit", W/2, H*0.50);
+      ctx.fillText("Press Enter to start", W/2, H*0.54);
+      ctx.fillText("K: Key Guide  ·  R: Ranking Board", W/2, H*0.60);
 
       if (noCreditMsg > 0) {
         ctx.font = "800 18px system-ui";
         ctx.fillStyle = "rgba(255,255,255,0.95)";
-        ctx.fillText("크레딧을 삽입하세요 (5)", W/2, H*0.62);
+        ctx.fillText("INSERT CREDIT (5)", W/2, H*0.84);
       }
+
+    } else if (state === STATE.KEYGUIDE) {
+      ctx.fillStyle = "rgba(0,0,0,0.70)";
+      ctx.fillRect(0,0,W,H);
+
+      ctx.fillStyle = "rgba(255,255,255,0.95)";
+      ctx.font = "900 22px system-ui";
+      ctx.fillText("KEY GUIDE", W/2, H*0.28);
+
+      ctx.font = "14px system-ui";
+      ctx.fillStyle = "rgba(255,255,255,0.88)";
+      const lines = [
+        "Move: Arrow Keys / WASD",
+        "Ultimate: X (2s invincibility)   |   Shield: C   |   Pause: P",
+        "Insert Credit: 5   |   Start: Enter",
+        "Continue: Y / N   |   Ranking: R   |   Close Guide: K",
+      ];
+      for (let i=0;i<lines.length;i++){
+        ctx.fillText(lines[i], W/2, H*0.36 + i*24);
+      }
+
+      if (noCreditMsg > 0) {
+        ctx.font = "800 18px system-ui";
+        ctx.fillStyle = "rgba(255,255,255,0.95)";
+        ctx.fillText("INSERT CREDIT (5)", W/2, H*0.84);
+      }
+
 
     } else if (state === STATE.PAUSE) {
       ctx.fillStyle = "rgba(0,0,0,0.45)";
@@ -1941,7 +2132,7 @@
       ctx.fillText("PAUSED", W/2, H/2);
       ctx.font = "14px system-ui";
       ctx.fillStyle = "rgba(255,255,255,0.75)";
-      ctx.fillText("P로 재개", W/2, H/2 + 34);
+      ctx.fillText("Press P to resume", W/2, H/2 + 34);
     } else if (state === STATE.ROUND_CLEAR) {
       ctx.fillStyle = "rgba(0,0,0,0.30)";
       ctx.fillRect(0,0,W,H);
@@ -1966,10 +2157,72 @@
       if (noCreditMsg > 0) {
         ctx.font = "800 18px system-ui";
         ctx.fillStyle = "rgba(255,255,255,0.95)";
-        ctx.fillText("크레딧을 삽입하세요 (5)", W/2, H/2 + 92);
+        ctx.fillText("INSERT CREDIT (5)", W/2, H/2 + 92);
       }
 
-    } else if (state === STATE.GAME_OVER) {
+    
+    } else if (state === STATE.RANKING) {
+      ctx.fillStyle = "rgba(0,0,0,0.65)";
+      ctx.fillRect(0,0,W,H);
+
+      ctx.fillStyle = "rgba(255,255,255,0.95)";
+      ctx.font = "900 28px system-ui";
+      ctx.fillText(rankingHeader || "RANKING", W/2, H*0.16);
+
+      // Last run summary (only when arriving from a finished run)
+      if (rankingHeader === "GAME OVER" || rankingHeader === "VICTORY") {
+        ctx.font = "14px system-ui";
+        ctx.fillStyle = "rgba(255,255,255,0.88)";
+        ctx.fillText(`SCORE: ${lastRunScore}`, W/2, H*0.22);
+        ctx.fillText(`Hits Taken: ${lastRunHits}`, W/2, H*0.25);
+      }
+
+      const x0 = Math.floor(W * 0.16);
+      const y0 = Math.floor(H * 0.34);
+      const rowH = 24;
+
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.font = "800 14px system-ui";
+      ctx.fillText("TOP 10", x0, y0 - 22);
+
+      ctx.fillStyle = "rgba(255,255,255,0.55)";
+      ctx.font = "12px system-ui";
+      ctx.fillText("RANK", x0, y0);
+      ctx.fillText("SCORE", x0 + 70, y0);
+      ctx.fillText("HITS", x0 + 190, y0);
+
+      if (!leaderboardCache || leaderboardCache.length === 0) {
+        ctx.textAlign = "center";
+        ctx.fillStyle = "rgba(255,255,255,0.75)";
+        ctx.font = "13px system-ui";
+        ctx.fillText("No Records", W/2, y0 + 44);
+      } else {
+        ctx.fillStyle = "rgba(255,255,255,0.90)";
+        ctx.font = "13px system-ui";
+        for (let i=0; i<Math.min(10, leaderboardCache.length); i++) {
+          const e = leaderboardCache[i];
+          const y = y0 + 24 + rowH * i;
+          ctx.fillText(`#${i+1}`, x0, y);
+          ctx.fillText(String(e.score), x0 + 70, y);
+          ctx.fillText(String(e.hits), x0 + 190, y);
+        }
+      }
+
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "rgba(255,255,255,0.78)";
+      ctx.font = "13px system-ui";
+      ctx.fillText("Enter: Start (costs 1 credit)  ·  R: Close", W/2, H*0.90);
+
+      if (noCreditMsg > 0) {
+        ctx.font = "800 18px system-ui";
+        ctx.fillStyle = "rgba(255,255,255,0.95)";
+        ctx.fillText("INSERT CREDIT (5)", W/2, H*0.84);
+      }
+
+} else if (state === STATE.GAME_OVER) {
       ctx.fillStyle = "rgba(0,0,0,0.55)";
       ctx.fillRect(0,0,W,H);
       ctx.fillStyle = "rgba(255,255,255,0.95)";
@@ -1977,11 +2230,11 @@
       ctx.fillText("GAME OVER", W/2, H/2 - 20);
       ctx.font = "14px system-ui";
       ctx.fillStyle = "rgba(255,255,255,0.8)";
-      ctx.fillText("Enter로 재시작", W/2, H/2 + 20);
+      ctx.fillText("Press Enter to restart", W/2, H/2 + 20);
       if (noCreditMsg > 0) {
         ctx.font = "800 18px system-ui";
         ctx.fillStyle = "rgba(255,255,255,0.95)";
-        ctx.fillText("크레딧을 삽입하세요 (5)", W/2, H/2 + 58);
+        ctx.fillText("INSERT CREDIT (5)", W/2, H/2 + 58);
       }
 
     } else if (state === STATE.VICTORY) {
@@ -1992,8 +2245,8 @@
       ctx.fillText("VICTORY!", W/2, H/2 - 24);
       ctx.font = "14px system-ui";
       ctx.fillStyle = "rgba(255,255,255,0.8)";
-      ctx.fillText(`최종 점수: ${score}`, W/2, H/2 + 12);
-      ctx.fillText("Enter로 다시 시작", W/2, H/2 + 40);
+      ctx.fillText(`Final Score: ${score}`, W/2, H/2 + 12);
+      ctx.fillText("Press Enter to restart", W/2, H/2 + 40);
     }
 
     if (runtimeError) {
@@ -2014,7 +2267,7 @@
 
       ctx.font = "12px system-ui";
       ctx.fillStyle = "rgba(255,255,255,0.75)";
-      ctx.fillText("F12 콘솔에서 전체 에러 확인 가능", W/2, y + 22);
+      ctx.fillText("Check the console (F12) for full error details", W/2, y + 22);
     }
 
     ctx.restore();
