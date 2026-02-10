@@ -208,7 +208,7 @@
   let schedulePtr = 0;
   let bossSpawned = false;
 
-  const roundHPMult     = [1.00, 1.22, 1.45];
+  const roundHPMult     = [1.00, 2.00, 2.80];
   const roundBulletMult = [1.00, 1.08, 1.16];
 
   // Ultimate gauge: fills when you keep hitting enemies (no weapon/power scaling)
@@ -394,42 +394,56 @@
 
     const add = (t, fn) => roundSchedule.push({ t, fn });
 
+    // Round-specific unit tiers:
+    // - Round 1: tier "r1" only (weaker set)
+    // - Round 3: tier "r3" only (stronger set)
+    // - Round 2: mix of "r1" and "r3" (all kinds can appear, but strong units are fewer than R3)
     if (r === 0) {
-      add(0.8,  () => spawnLine("scout", 6, 70, 1.05));
-      add(2.3,  () => spawnV("scout", 6, 1.05));
-      add(4.0,  () => spawnPairShooters(false));
-      add(6.3,  () => spawnZigzagPack(5, 1.05));
-      add(9.2,  () => spawnCarrier(0.55));
-      add(12.2, () => spawnLine("scout", 8, 60, 1.10));
-      add(14.8, () => spawnTank(0.50));
-      add(17.6, () => spawnZigzagPack(6, 1.08));
-      add(20.5, () => spawnCarrier(0.30));
-      add(23.0, () => spawnPairShooters(false));
+      add(0.8,  () => spawnLine("scout", 6, 70, 1.05, "r1"));
+      add(2.3,  () => spawnV("scout", 6, 1.05, "r1"));
+      add(4.0,  () => spawnPairShooters(false, "r1"));
+      add(6.3,  () => spawnZigzagPack(5, 1.05, "r1"));
+      add(9.2,  () => spawnCarrier(0.55, "r1"));
+      add(12.2, () => spawnLine("scout", 8, 60, 1.10, "r1"));
+      add(14.8, () => spawnPairShooters(false, "r1"));
+      add(15.8, () => spawnZigzagPack(5, 1.06, "r1"));
+      add(18.5, () => spawnLine("scout", 6, 58, 1.12, "r1"));
+      add(17.6, () => spawnZigzagPack(6, 1.08, "r1"));
+      add(20.5, () => spawnCarrier(0.30, "r1"));
+      add(23.0, () => spawnPairShooters(false, "r1")); // last spawn @ 23s
     } else if (r === 1) {
-      add(0.8,  () => spawnLine("scout", 8, 60, 1.15));
-      add(2.6,  () => spawnPairShooters(true));
-      add(5.4,  () => spawnZigzagPack(8, 1.12));
-      add(8.4,  () => spawnTank(0.35));
-      add(10.7, () => spawnCarrier(0.65));
-      add(13.0, () => spawnLine("scout", 10, 54, 1.18));
-      add(15.6, () => spawnZigzagPack(9, 1.15));
-      add(18.0, () => spawnPairShooters(true));
-      add(21.0, () => spawnTank(0.70));
-      add(23.3, () => spawnCarrier(0.30));
-      add(25.6, () => spawnLine("scout", 12, 50, 1.20));
+      // Round 2 (mix): weaker units still show up, plus a limited amount of stronger units.
+      add(0.8,  () => spawnLine("scout", 8, 60, 1.15, "r1"));
+      add(2.6,  () => spawnPairShooters(true, "r1"));
+      add(5.4,  () => spawnZigzagPack(8, 1.12, "r1"));
+add(10.7, () => spawnCarrier(0.65, "r1"));
+      add(13.0, () => spawnLine("scout", 10, 54, 1.18, "r1"));
+
+      // Inject some stronger units (smaller counts than Round 3)
+      add(15.6, () => spawnZigzagPack(6, 1.15, "r3"));
+      add(18.0, () => spawnPairShooters(true, "r1"));
+      add(20.2, () => spawnLine("scout", 6, 56, 1.20, "r3"));
+      add(21.5, () => spawnTank(0.70, "r3"));
+      add(23.3, () => spawnCarrier(0.30, "r3"));
+      add(24.8, () => spawnPairShooters(false, "r3"));
+      add(27.0, () => spawnLine("scout", 8, 52, 1.22, "r3")); // last spawn @ 27s
     } else {
-      add(0.8,  () => spawnLine("scout", 10, 54, 1.22));
-      add(2.5,  () => spawnPairShooters(true));
-      add(4.8,  () => spawnLine("scout", 12, 48, 1.24));
-      add(7.0,  () => spawnZigzagPack(11, 1.18));
-      add(9.6,  () => spawnTank(0.30));
-      add(11.8, () => spawnCarrier(0.60));
-      add(14.0, () => spawnPairShooters(true));
-      add(16.5, () => spawnZigzagPack(12, 1.20));
-      add(19.2, () => spawnLine("scout", 14, 44, 1.28));
-      add(21.7, () => spawnTank(0.75));
-      add(24.0, () => spawnCarrier(0.30));
-      add(26.5, () => spawnPairShooters(true));
+      // Round 3 (strong set only)
+      add(0.8,  () => spawnLine("scout", 12, 50, 1.22, "r3"));
+      add(2.5,  () => spawnPairShooters(true, "r3"));
+      add(4.8,  () => spawnLine("scout", 14, 46, 1.24, "r3"));
+      add(7.0,  () => spawnZigzagPack(12, 1.18, "r3"));
+add(11.8, () => spawnCarrier(0.60, "r3"));
+      add(14.0, () => spawnPairShooters(true, "r3"));
+      add(16.5, () => spawnZigzagPack(14, 1.20, "r3"));
+      add(19.2, () => spawnLine("scout", 16, 42, 1.28, "r3"));
+add(24.0, () => spawnCarrier(0.30, "r3"));
+      add(24.5, () => spawnTank(0.50, "r3"));
+      add(26.5, () => spawnPairShooters(true, "r3"));
+
+      // Extend waves so last spawn is at 32s (as specified)
+      add(28.5, () => spawnZigzagPack(16, 1.22, "r3"));
+      add(32.0, () => spawnLine("scout", 18, 40, 1.30, "r3")); // last spawn @ 32s
     }
 
     roundSchedule.sort((a,b) => a.t - b.t);
@@ -438,19 +452,46 @@
   // ======================
   // Enemies
   // ======================
+  // Tiered unit sets (NOT round-based HP scaling):
+  // - r1: used as the "Round 1-only" weaker set
+  // - r3: used as the "Round 3-only" stronger set (Round 2 can include a smaller amount)
   const EnemyBase = {
-    scout:  { hp: 8,  r: 16, speed: 165, points: 20 },
-    shooter:{ hp: 12, r: 18, speed: 115, points: 35 },
-    zigzag: { hp: 11, r: 17, speed: 135, points: 30 },
-    tank:   { hp: 26, r: 24, speed: 80,  points: 70 },
-    carrier:{ hp: 16, r: 20, speed: 100, points: 55 },
+    scout:  { hp: 8,   r: 16, speed: 165, points: 20 },
+    shooter:{ hp: 12,  r: 18, speed: 115, points: 35 },
+    zigzag: { hp: 11,  r: 17, speed: 135, points: 30 },
+    tank:   { hp: 26,  r: 24, speed: 80,  points: 70 },
+    carrier:{ hp: 16,  r: 20, speed: 100, points: 55 },
   };
 
+  // Yellow heavy unit (tank) spec
+  // - Spawns from Round 2+
+  // - Round-based HP (R2: 3 ultimates, R3: 4 ultimates)
+  const YELLOW_TANK_ULT_DMG = 220;
+  // Round-based tank HP:
+  // - Round 2: takes 3 ultimates
+  // - Round 3: takes 4 ultimates
+  function getYellowTankHP(r=roundIndex){
+    const ultHits = (r === 2) ? 4 : 3;
+    return YELLOW_TANK_ULT_DMG * ultHits;
+  }
+
+  function getEnemyBase(type, tier="r1") {
+    // HP scaling is handled in makeEnemy via roundHPMult; tier is ignored.
+    return EnemyBase[type];
+  }
+
   function makeEnemy(type, x, y, extra={}) {
-    const base = EnemyBase[type];
+    const base = getEnemyBase(type);
+
     x = clamp(x, base.r + 6, W - (base.r + 6));
-    const hpM = roundHPMult[roundIndex] ?? 1;
-    const hp = Math.ceil(base.hp * hpM * (extra.hpMult ?? 1));
+    // Round-based HP scaling (normal enemies)
+    // Yellow tank uses fixed HP.
+    let hp;
+    if (type === "tank") {
+      hp = Math.ceil((extra.hp ?? getYellowTankHP(roundIndex)));
+    } else {
+      hp = Math.ceil(base.hp * roundHPMult[roundIndex] * 0.7 * (extra.hpMult ?? 1));
+    }
 
     const baseCd = ({
       scout: 2.00,
@@ -460,11 +501,12 @@
       carrier: 2.30,
     })[type] ?? 2.0;
 
-    const cdMult = (roundIndex === 0) ? 1.00 : (roundIndex === 1 ? 0.95 : 0.90);
+    // keep existing round cadence tuning
+    const cdMult = (roundIndex === 0) ? 1.00 : (roundIndex === 1 ? 0.90 : 0.85);
 
-    // 드롭 규칙:
-    // - carrier는 보급품 100% 드롭
-    // - 그 외 유닛은 보급품 드롭 0%
+    // Drop rule:
+    // - carrier drops supply 100%
+    // - other units drop 0%
     const dropPower = (type === "carrier") ? 1.0 : 0.0;
 
     return {
@@ -482,13 +524,20 @@
       zigAmp: extra.zigAmp ?? 55,
       zigFreq: extra.zigFreq ?? 2.1,
       stopY: extra.stopY ?? rand(H*0.14, H*0.24),
+      lockY: extra.lockY ?? null,
+      targetY: extra.targetY ?? null,
+      entryDone: extra.entryDone ?? false,
+      patrolVx: extra.patrolVx ?? null,
+      entryVy: extra.entryVy ?? null,
       dropPower,
       facing: Math.PI/2, // toward player each frame
     };
   }
 
-  function spawnLine(type, n, gap, speedMult=1.0) {
-    const r = (EnemyBase[type]?.r ?? 18);
+  
+  function spawnLine(type, n, gap, speedMult=1.0, tier="r1") {
+    const base = getEnemyBase(type, tier);
+    const r = (base?.r ?? 18);
     const side = Math.max(40, r + 10);
 
     let effGap = gap;
@@ -504,45 +553,80 @@
     const startX = clamp((W - totalW)/2, side, W - side - totalW);
     for (let i=0;i<n;i++){
       enemies.push(makeEnemy(type, startX + i*effGap, -30 - i*10, {
-        vy: (EnemyBase[type]?.speed ?? 120) * speedMult,
+          vy: (base?.speed ?? 120) * speedMult,
       }));
     }
   }
 
-  function spawnV(type, n, speedMult=1.0) {
+  function spawnV(type, n, speedMult=1.0, tier="r1") {
+    const base = getEnemyBase(type, tier);
     const mid = W/2;
     const spread = 28;
     for (let i=0;i<n;i++){
       const x = mid + (i - (n-1)/2)*spread;
-      enemies.push(makeEnemy(type, x, -40 - i*18, { vy: (EnemyBase[type].speed)*speedMult }));
+      enemies.push(makeEnemy(type, x, -40 - i*18, { tier, vy: (base.speed)*speedMult }));
     }
   }
 
-  function spawnPairShooters(denser=false) {
+
+  function spawnPairShooters(denser=false, tier="r1") {
     const left = W*0.28, right = W*0.72;
-    enemies.push(makeEnemy("shooter", left,  -30, { stopY: denser ? H*0.18 : H*0.22 }));
-    enemies.push(makeEnemy("shooter", right, -70, { stopY: denser ? H*0.18 : H*0.24 }));
-    if (denser) enemies.push(makeEnemy("shooter", W*0.50, -110, { stopY: H*0.20 }));
+    enemies.push(makeEnemy("shooter", left,  -30, { tier, stopY: denser ? H*0.18 : H*0.22 }));
+    enemies.push(makeEnemy("shooter", right, -70, { tier, stopY: denser ? H*0.18 : H*0.24 }));
+    if (denser) enemies.push(makeEnemy("shooter", W*0.50, -110, { tier, stopY: H*0.20 }));
   }
 
-  function spawnZigzagPack(n, speedMult=1.0) {
+
+  function spawnZigzagPack(n, speedMult=1.0, tier="r1") {
+    const base = getEnemyBase("zigzag", tier);
     for (let i=0;i<n;i++){
       const x = rand(70, W-70);
       enemies.push(makeEnemy("zigzag", x, -40 - i*22, {
-        vy: EnemyBase.zigzag.speed * speedMult,
+          vy: base.speed * speedMult,
         zigAmp: 55,
         zigFreq: 2.1
       }));
     }
   }
 
-  function spawnTank(xFrac=0.5) {
-    enemies.push(makeEnemy("tank", W*xFrac, -40, { vy: EnemyBase.tank.speed }));
+
+  function spawnTank(xFrac=0.5, tier="r1") {
+    // Yellow heavy unit: enters from the top, then patrols horizontally at a fixed Y (right under the boss area).
+    const base = getEnemyBase("tank", tier);
+
+    // Boss anchor estimate (boss may not be spawned yet during the wave).
+    const estBossY = (roundIndex === 1) ? H*0.16 : H*0.14;
+    const estBossH = (roundIndex === 1) ? 160 : 190;
+
+    // Fixed target under the boss (no teleporting when the boss appears).
+    let yTarget = estBossY + estBossH/2 + base.r + 16;
+    yTarget = clamp(yTarget, 80, H - 140);
+
+    // Spawn above the screen, then descend to yTarget.
+    const spawnY = -base.r - 40;
+
+    const dir = (Math.random() < 0.5) ? -1 : 1;
+    const patrolVx = dir * (roundIndex === 0 ? 140 : (roundIndex === 1 ? 155 : 170));
+    const entryVy = 170;
+
+    enemies.push(makeEnemy("tank", W*xFrac, spawnY, {
+      tier,
+      hp: getYellowTankHP(roundIndex),
+      vx: 0,
+      vy: entryVy,
+      targetY: yTarget,
+      entryDone: false,
+      patrolVx,
+      entryVy,
+    }));
   }
 
-  function spawnCarrier(xFrac=0.5) {
-    enemies.push(makeEnemy("carrier", W*xFrac, -50, { vy: EnemyBase.carrier.speed }));
+
+  function spawnCarrier(xFrac=0.5, tier="r1") {
+    const base = getEnemyBase("carrier", tier);
+    enemies.push(makeEnemy("carrier", W*xFrac, -50, { tier, vy: base.speed }));
   }
+
 
   // ======================
   // Aim helpers
@@ -661,7 +745,7 @@
   }
 
   function shootPlayer() {
-    const dmg = 2;
+    const dmg = 2 + 0.5 * player.power;
     const speed = 650;
 
     const muzzles = getMuzzlesForWeapon(player.weapon);
@@ -716,6 +800,9 @@ nuke = {
   }
 
   function maybeDropSupplyForEnemy(e) {
+    // Prevent duplicate drops from the same enemy (e.g., multiple bullets hitting on the death frame)
+    if (e._dropDone) return;
+    e._dropDone = true;
     if (Math.random() < e.dropPower) {
       powerups.push({ x:e.x, y:e.y, r:12, vy:120, t:0, kind:"power" });
     }
@@ -724,12 +811,25 @@ nuke = {
   function applyNukeImpact() {
     // 궁극기 킬도 "탄환 킬과 동일한 드롭 공식" 적용
     // (현재 규칙상 carrier=100%, 나머지=0%)
+    const survivors = [];
     for (const e of enemies) {
-      score += e.points;
-      maybeDropSupplyForEnemy(e);
-      popParticles(e.x, e.y, 14);
+      if (e.type === "tank") {
+        e.hp -= YELLOW_TANK_ULT_DMG;
+        popParticles(e.x, e.y, 18);
+        if (e.hp <= 0) {
+          score += e.points;
+          maybeDropSupplyForEnemy(e);
+          popParticles(e.x, e.y, 22);
+        } else {
+          survivors.push(e);
+        }
+      } else {
+        score += e.points;
+        maybeDropSupplyForEnemy(e);
+        popParticles(e.x, e.y, 14);
+      }
     }
-    enemies = [];
+    enemies = survivors;
 
     const bossAlive = (boss && boss.alive && boss.entryDone);
 
@@ -812,7 +912,7 @@ nuke = {
   }
 
   function makeBoss1() {
-    const b = makeBossBase("Iron Mantis", 1200, 220, 140, 1);
+    const b = makeBossBase("Iron Mantis", 1360, 220, 140, 1);
     b.pattern = (dt) => {
       b.t += dt;
       if (!b.entryDone) {
@@ -841,7 +941,7 @@ nuke = {
   }
 
   function makeBoss2() {
-    const b = makeBossBase("Storm Railgun", 1850, 260, 160, 2);
+    const b = makeBossBase("Storm Railgun", 3600, 260, 160, 2);
     b.vx = 135;
     b.pattern = (dt) => {
       b.t += dt;
@@ -875,7 +975,7 @@ nuke = {
   }
 
   function makeBoss3() {
-    const b = makeBossBase("Abyss Fortress", 2500, 300, 190, 3);
+    const b = makeBossBase("Abyss Fortress", 7200, 300, 190, 3);
     b.vx = 150;
     b.pattern = (dt) => {
       b.t += dt;
@@ -973,7 +1073,7 @@ nuke = {
       schedulePtr++;
     }
 
-    const bossTime = (roundIndex === 0) ? 26.0 : (roundIndex === 1 ? 30.0 : 31.0);
+    const bossTime = (roundIndex === 0) ? 26.0 : (roundIndex === 1 ? 30.0 : 35.0);
     if (!bossSpawned && roundTime >= bossTime) {
       bossSpawned = true;
       spawnBoss(roundIndex);
@@ -1017,6 +1117,43 @@ nuke = {
       // face the player
       e.facing = Math.atan2(player.y - e.y, player.x - e.x);
 
+      // Yellow heavy unit (tank): enters from the top, then holds a fixed Y and patrols on X until destroyed
+      if (e.type === "tank") {
+        // targetY is set at spawn (under the boss' intended position). No teleport / re-anchoring.
+        if (e.targetY == null) {
+          const estBossY = (roundIndex === 1) ? H*0.16 : H*0.14;
+          const estBossH = (roundIndex === 1) ? 160 : 190;
+          e.targetY = clamp(estBossY + estBossH/2 + e.r + 50, 80, H - 140);
+        }
+
+        if (!e.entryDone) {
+          const vy = (e.entryVy != null) ? e.entryVy : (e.vy || 180);
+          e.y += vy * dt;
+          if (e.y >= e.targetY) {
+            e.y = e.targetY;
+            e.entryDone = true;
+            if (e.patrolVx != null) e.vx = e.patrolVx;
+          }
+        } else {
+          e.x += e.vx * dt;
+          const minX = e.r + 6;
+          const maxX = W - (e.r + 6);
+          if (e.x <= minX) { e.x = minX; e.vx = Math.abs(e.vx); }
+          if (e.x >= maxX) { e.x = maxX; e.vx = -Math.abs(e.vx); }
+
+          e.shootCd -= dt;
+          if (e.shootCd <= 0) {
+            spreadAimed(e.x, e.y + 12, 3, (roundIndex === 0 ? 210 : (roundIndex === 1 ? 230 : 245)), 12);
+            e.shootCd = e.baseCd;
+          }
+        }
+
+        if (e.entryDone) e.y = e.targetY;
+
+        continue;
+      }
+
+
       if (e.type === "zigzag") e.x += Math.sin(e.t * e.zigFreq) * e.zigAmp * dt;
 
       // Keep all enemies fully on-screen (prevents unreachable off-screen shooters).
@@ -1048,7 +1185,7 @@ nuke = {
             } else if (roundIndex === 1) {
               spreadAimed(e.x, e.y + 10, 2, 230, 10);
             } else {
-              spreadAimed(e.x, e.y + 10, 3, 250, 10);
+              spreadAimed(e.x, e.y + 10, 2, 250, 10);
             }
           } else if (e.type === "tank") {
             spreadAimed(e.x, e.y + 12, 3, (roundIndex === 0 ? 210 : (roundIndex === 1 ? 230 : 245)), 12);
@@ -1188,6 +1325,7 @@ nuke = {
     let hitForUlt = false;
     for (const b of bullets) {
       for (const e of enemies) {
+        if (e.hp <= 0) continue;
         if (circleHit(b.x, b.y, b.r, e.x, e.y, e.r)) {
           e.hp -= b.dmg;
           hitForUlt = true;
@@ -1727,26 +1865,26 @@ nuke = {
       ctx.strokeStyle = "rgba(255,255,255,0.12)";
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(-w*0.18, -h*0.02);
-      ctx.lineTo( w*0.18, -h*0.06);
+      ctx.moveTo(-w*0.18,  h*0.02);
+      ctx.lineTo( w*0.18,  h*0.02);
       ctx.stroke();
       ctx.beginPath();
-      ctx.moveTo(-w*0.14,  h*0.26);
-      ctx.lineTo( w*0.14,  h*0.22);
+      ctx.moveTo(-w*0.14,  h*0.30);
+      ctx.lineTo( w*0.14,  h*0.30);
       ctx.stroke();
 
       // core glow slit (avoid "camera lens" look)
       ctx.save();
-      ctx.translate(0, -h*0.12);
+      ctx.translate(0, -h*0.18);
       ctx.globalAlpha = 0.85;
       ctx.fillStyle = "#ff4d6d";
       ctx.beginPath();
-      ctx.ellipse(0, 0, w*0.14, h*0.045, 0, 0, Math.PI*2);
+      ctx.ellipse(0, 0, w*0.12, h*0.085, 0, 0, Math.PI*2);
       ctx.fill();
       ctx.globalAlpha = 0.20;
       ctx.fillStyle = "#ffffff";
       ctx.beginPath();
-      ctx.ellipse(0, 0, w*0.22, h*0.075, 0, 0, Math.PI*2);
+      ctx.ellipse(0, 0, w*0.18, h*0.125, 0, 0, Math.PI*2);
       ctx.fill();
       ctx.restore();
 
@@ -1944,27 +2082,6 @@ nuke = {
     const u = nk.u ?? 0;
 
     ctx.save();
-
-    const shadowR = 26 + (s * 26);
-    ctx.globalAlpha = 0.22 * (1 - u);
-    ctx.fillStyle = "#000";
-    ctx.beginPath();
-    ctx.ellipse(nk.x, nk.y + 80, shadowR*1.1, shadowR*0.45, 0, 0, Math.PI*2);
-    ctx.fill();
-
-    if (nk.state === "recede") {
-      ctx.globalAlpha = 0.12 * (1 - u);
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 2;
-      for (let i=0;i<6;i++){
-        const ang = (-Math.PI/2) + (i-2.5)*0.18;
-        const len = 80 + (1 - u) * 160;
-        ctx.beginPath();
-        ctx.moveTo(nk.x + Math.cos(ang)*8, nk.y + Math.sin(ang)*8);
-        ctx.lineTo(nk.x - Math.cos(ang)*len, nk.y - Math.sin(ang)*len);
-        ctx.stroke();
-      }
-    }
 
     ctx.globalAlpha = 1;
     ctx.translate(nk.x, nk.y);
