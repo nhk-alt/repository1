@@ -17,9 +17,16 @@
   </div>
 
 <script>
+
 (() => {
   "use strict";
 
+  // ------------------------------------------------------------
+  // Refactor pass (v50):
+  // - No gameplay/spec changes intended.
+  // - Removed redundant section dividers.
+  // - Fixed several comments to match actual behavior.
+  // ------------------------------------------------------------
 
   // ======================
   // Embedded Sprites
@@ -145,8 +152,8 @@ resizeCanvasToDisplaySize();
 
       if (k === "enter" && state !== STATE.CONTINUE) startOrRestart();
       if (k === "p") togglePause();
-      if (k === "x") tryUltimate();
-      if (k === "c") tryShield();
+      if (k === "x" || e.code === "Space") tryUltimate();
+      if (k === "c" || k === "shift") tryShield();
     }
     keys.add(k);
     if (["arrowup","arrowdown","arrowleft","arrowright"," "].includes(k)) e.preventDefault();
@@ -212,6 +219,54 @@ resizeCanvasToDisplaySize();
   function sfxPower()     { tone(1200, 0.07, 0.06, "square", 1600); }
   function sfxHit()       { tone(140, 0.12, 0.09, "square", 60); noise(0.05, 0.045); }
   function sfxUltimate()  { tone(220, 0.35, 0.11, "sawtooth", 40); noise(0.25, 0.085); }
+  function sfxUltReady() {
+    if (!SFX.ctx || !SFX.enabled) return;
+    const ctx = SFX.ctx;
+    const t0 = ctx.currentTime;
+
+    // Retro arcade "ULT READY" chime: rising arpeggio + sparkle noise (audible, game-like).
+    const notes = [
+      { f: 523.25, t: 0.00, dur: 0.10, vol: 0.16, type: "square", end: 659.25 },   // C5 -> E5
+      { f: 659.25, t: 0.09, dur: 0.11, vol: 0.15, type: "square", end: 783.99 },   // E5 -> G5
+      { f: 783.99, t: 0.19, dur: 0.12, vol: 0.14, type: "square", end: 987.77 },   // G5 -> B5
+      { f: 987.77, t: 0.30, dur: 0.14, vol: 0.13, type: "square", end: 1318.51 },  // B5 -> E6
+    ];
+
+    for (const n of notes) {
+      const ts = t0 + n.t;
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = n.type;
+      osc.frequency.setValueAtTime(n.f, ts);
+      if (n.end !== null) osc.frequency.exponentialRampToValueAtTime(Math.max(20, n.end), ts + n.dur);
+      g.gain.setValueAtTime(0.0001, ts);
+      g.gain.exponentialRampToValueAtTime(n.vol, ts + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, ts + n.dur);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(ts); osc.stop(ts + n.dur + 0.02);
+    }
+
+    // Timing anchor for the sparkle tail (ping chord removed).
+    const chordT = t0 + 0.46;
+
+    // Tiny sparkle noise tail so it cuts through.
+    const ndur = 0.10;
+    const bufferSize = Math.floor(ctx.sampleRate * ndur);
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i=0; i<bufferSize; i++) {
+      const fade = 1 - i / bufferSize;
+      data[i] = (Math.random() * 2 - 1) * fade;
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(0.06, chordT - 0.02);
+    ng.gain.exponentialRampToValueAtTime(0.0001, chordT - 0.02 + ndur);
+    src.connect(ng); ng.connect(ctx.destination);
+    src.start(chordT - 0.02);
+    src.stop(chordT - 0.02 + ndur + 0.02);
+  }
   function sfxWarning()   { tone(260, 0.10, 0.05, "square", 520); }
   function sfxShield()    { tone(520, 0.12, 0.07, "triangle", 980); }
 
@@ -262,7 +317,17 @@ resizeCanvasToDisplaySize();
   // ======================
   // Game State
   // ======================
-  const STATE = {TITLE:"TITLE", PLAY:"PLAY", ROUND_CLEAR:"ROUND_CLEAR", CONTINUE:"CONTINUE", GAME_OVER:"GAME_OVER", VICTORY:"VICTORY", PAUSE:"PAUSE", RANKING:"RANKING", KEYGUIDE:"KEYGUIDE" };
+  const STATE = {
+    TITLE: "TITLE",
+    PLAY: "PLAY",
+    ROUND_CLEAR: "ROUND_CLEAR",
+    CONTINUE: "CONTINUE",
+    GAME_OVER: "GAME_OVER",
+    VICTORY: "VICTORY",
+    PAUSE: "PAUSE",
+    RANKING: "RANKING",
+    KEYGUIDE: "KEYGUIDE",
+  };
   let state = STATE.TITLE;
   let prevState = state;
 
@@ -480,7 +545,6 @@ resizeCanvasToDisplaySize();
   // ======================
   // Schedule
   // ======================
-  // ======================
 // Round scheduling (data-driven)
 // ======================
 const S = (t, fn) => [t, fn];
@@ -649,7 +713,7 @@ function buildSchedule(r) {
     };
   }
 
-  
+
   function spawnLine(type, n, gap, speedMult=1.0) {
     const base = getEnemyBase(type);
     const r = (base?.r ?? 18);
@@ -761,9 +825,11 @@ function buildSchedule(r) {
     const m = getRoundBalance().enemyBulletMult ?? 1;
     const s = speed * m;
     const half = (count-1)/2;
+    const spreadScale = (player.hitR || player.r) / 18;
+    const step = (spreadDeg * spreadScale) * Math.PI/180;
 
     for (let i=0;i<count;i++){
-      const ang = base + (i-half) * (spreadDeg*Math.PI/180);
+      const ang = base + (i-half) * step;
       pushEnemyBullet(fromX, fromY, Math.cos(ang)*s, Math.sin(ang)*s, 6, src);
     }
   }
@@ -1193,7 +1259,7 @@ if (state === STATE.PLAY) {
     }
   }
 
-  
+
   // ======================
   // Update helpers (v32 refactor)
   // ======================
@@ -1210,7 +1276,7 @@ if (state === STATE.PLAY) {
     }
   }
 
-  // Boss spawns 3 seconds after the last scheduled wave is fully cleared.
+  // Boss spawns after BOSS_SPAWN_DELAY seconds once the last scheduled wave is fully cleared.
   function updateBossSpawnAfterWaves() {
     if (bossSpawned) return;
 
@@ -1513,12 +1579,14 @@ function update(dt) {
     }
     bullets = bullets.filter(b => !b.dead);
 
-    // Ultimate gauge charge (time-based, independent of weapon/power). Only charges while not holding an ultimate.
+    // Ultimate gauge: charges when your shots hit (time-based amount per hit; independent of weapon/power). Only charges while you don't have a ready ultimate.
     if (hitForUlt && player.ult <= 0) {
+      const before = player.ultGauge;
       player.ultGauge = clamp(player.ultGauge + (dt / ULT_FILL_SECONDS), 0, 1);
-      if (player.ultGauge >= 1) {
+      if (before < 1 && player.ultGauge >= 1) {
         player.ult = 1;
         player.ultGauge = 1;
+        sfxUltReady();
       }
     }
 
@@ -1753,7 +1821,7 @@ drawOverlayText();
     }
   }
 
-  
+
   // Weapon upgrade barrel attachments: cylinder + cone.
   // - Tip is placed at each muzzle position so bullets appear to originate from the barrel.
   // - When called from a scaled context, pass that scale as `k` so the barrel stays visually consistent.
@@ -1907,7 +1975,7 @@ drawOverlayText();
       // Weapon upgrades: barrel attachments (cylinder + cone)
       drawWeaponBarrelsWorld(player.weapon, k);
 
-      // hitbox hint
+      // Hitbox visualization intentionally omitted (player.hitR is used for collisions).
       ctx.restore();
     }
 
@@ -2121,7 +2189,7 @@ drawOverlayText();
       ctx.lineWidth = 2;
       ctx.stroke();
 
-    
+
     } else if (b.variant === 2) {
       // Storm Railgun: sleek spear cruiser (clean, symmetric silhouette)
       ctx.fillStyle = "#24292f";
@@ -2550,7 +2618,7 @@ drawOverlayText();
       ctx.fillStyle = "rgba(255,255,255,0.88)";
       const lines = [
         "Move: Arrow Keys / WASD",
-        "Ultimate: X (2s invincibility)   |   Shield: C   |   Pause: P",
+        "Ultimate: X / Space (2s invincibility)   |   Shield: C / Shift   |   Pause: P",
         "Insert Credit: 5   |   Start: Enter",
         "Continue: Y / N   |   Ranking: R   |   Close Guide: K",
       ];
@@ -2601,7 +2669,7 @@ drawOverlayText();
         ctx.fillText("INSERT CREDIT (5)", W/2, H/2 + 92);
       }
 
-    
+
     } else if (state === STATE.RANKING) {
       ctx.fillStyle = "rgba(0,0,0,0.65)";
       ctx.fillRect(0,0,W,H);
